@@ -246,3 +246,11 @@ function extractVerificationCode(text) {
 
   return null;
 }
+(function() {
+if (window.__MULTIPAGE_QQ_MAIL_LOADED) {
+  console.log('[MultiPage:qq-mail] Content script already loaded on', location.href);
+  return;
+}
+window.__MULTIPAGE_QQ_MAIL_LOADED = true;
+
+})();

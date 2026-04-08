@@ -1,5 +1,12 @@
 // content/duck-mail.js — Content script for DuckDuckGo Email Protection autofill settings
 
+(function() {
+if (window.__MULTIPAGE_DUCK_MAIL_LOADED) {
+  console.log('[MultiPage:duck-mail] Content script already loaded on', location.href);
+  return;
+}
+window.__MULTIPAGE_DUCK_MAIL_LOADED = true;
+
 console.log('[MultiPage:duck-mail] Content script loaded on', location.href);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -72,3 +79,4 @@ async function fetchDuckEmail(payload = {}) {
   log(`Duck Mail: Ready address ${nextEmail}`, 'ok');
   return { email: nextEmail, generated: true };
 }
+})();

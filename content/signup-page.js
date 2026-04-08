@@ -1,6 +1,13 @@
 // content/signup-page.js — Content script for OpenAI auth pages (steps 2, 3, 4-receive, 5)
 // Injected on: auth0.openai.com, auth.openai.com, accounts.openai.com
 
+(function() {
+if (window.__MULTIPAGE_SIGNUP_PAGE_LOADED) {
+  console.log('[MultiPage:signup-page] Content script already loaded on', location.href);
+  return;
+}
+window.__MULTIPAGE_SIGNUP_PAGE_LOADED = true;
+
 console.log('[MultiPage:signup-page] Content script loaded on', location.href);
 const { isVerificationCodeRejectedText } = VerificationCode;
 const { isPhoneVerificationRequiredText } = PhoneVerification;
@@ -633,3 +640,4 @@ async function step5_fillNameBirthday(payload) {
     log('Step 5: Clicked "完成帐户创建"');
   }
 }
+})();

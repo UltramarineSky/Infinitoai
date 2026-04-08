@@ -1,6 +1,12 @@
 // content/utils.js — Shared utilities for all content scripts
 
-const SCRIPT_SOURCE = (() => {
+var __MULTIPAGE_UTILS_STATE = globalThis.__MULTIPAGE_UTILS_STATE || (globalThis.__MULTIPAGE_UTILS_STATE = {
+  flowStopped: false,
+  stopListenerRegistered: false,
+  readyReported: false,
+});
+
+var SCRIPT_SOURCE = (() => {
   if (window.__MULTIPAGE_SOURCE) return window.__MULTIPAGE_SOURCE;
   const url = location.href;
   if (url.includes('auth0.openai.com') || url.includes('auth.openai.com') || url.includes('accounts.openai.com')) return 'signup-page';
@@ -12,19 +18,21 @@ const SCRIPT_SOURCE = (() => {
   return 'vps-panel';
 })();
 
-const LOG_PREFIX = `[MultiPage:${SCRIPT_SOURCE}]`;
-const STOP_ERROR_MESSAGE = 'Flow stopped by user.';
-let flowStopped = false;
+var LOG_PREFIX = `[MultiPage:${SCRIPT_SOURCE}]`;
+var STOP_ERROR_MESSAGE = 'Flow stopped by user.';
 
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === 'STOP_FLOW') {
-    flowStopped = true;
-    console.warn(LOG_PREFIX, STOP_ERROR_MESSAGE);
-  }
-});
+if (!__MULTIPAGE_UTILS_STATE.stopListenerRegistered) {
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'STOP_FLOW') {
+      __MULTIPAGE_UTILS_STATE.flowStopped = true;
+      console.warn(LOG_PREFIX, STOP_ERROR_MESSAGE);
+    }
+  });
+  __MULTIPAGE_UTILS_STATE.stopListenerRegistered = true;
+}
 
 function resetStopState() {
-  flowStopped = false;
+  __MULTIPAGE_UTILS_STATE.flowStopped = false;
 }
 
 function isStopError(error) {
@@ -33,7 +41,7 @@ function isStopError(error) {
 }
 
 function throwIfStopped() {
-  if (flowStopped) {
+  if (__MULTIPAGE_UTILS_STATE.flowStopped) {
     throw new Error(STOP_ERROR_MESSAGE);
   }
 }
@@ -70,7 +78,7 @@ function waitForElement(selector, timeout = 10000) {
     };
 
     const observer = new MutationObserver(() => {
-      if (flowStopped) {
+      if (__MULTIPAGE_UTILS_STATE.flowStopped) {
         cleanup();
         reject(new Error(STOP_ERROR_MESSAGE));
         return;
@@ -98,7 +106,7 @@ function waitForElement(selector, timeout = 10000) {
 
     const pollStop = () => {
       if (settled) return;
-      if (flowStopped) {
+      if (__MULTIPAGE_UTILS_STATE.flowStopped) {
         cleanup();
         reject(new Error(STOP_ERROR_MESSAGE));
         return;
@@ -152,7 +160,7 @@ function waitForElementByText(containerSelector, textPattern, timeout = 10000) {
     };
 
     const observer = new MutationObserver(() => {
-      if (flowStopped) {
+      if (__MULTIPAGE_UTILS_STATE.flowStopped) {
         cleanup();
         reject(new Error(STOP_ERROR_MESSAGE));
         return;
@@ -180,7 +188,7 @@ function waitForElementByText(containerSelector, textPattern, timeout = 10000) {
 
     const pollStop = () => {
       if (settled) return;
-      if (flowStopped) {
+      if (__MULTIPAGE_UTILS_STATE.flowStopped) {
         cleanup();
         reject(new Error(STOP_ERROR_MESSAGE));
         return;
@@ -307,7 +315,7 @@ function sleep(ms) {
     const start = Date.now();
 
     function tick() {
-      if (flowStopped) {
+      if (__MULTIPAGE_UTILS_STATE.flowStopped) {
         reject(new Error(STOP_ERROR_MESSAGE));
         return;
       }
@@ -329,7 +337,8 @@ async function humanPause(min = 250, max = 850) {
 
 // Auto-report ready on load
 // Skip ready signal from child iframes of mail pages to avoid overwriting the top frame's registration
-const _isMailChildFrame = (SCRIPT_SOURCE === 'qq-mail' || SCRIPT_SOURCE === 'mail-163' || SCRIPT_SOURCE === 'inbucket-mail') && window !== window.top;
-if (!_isMailChildFrame) {
+var _isMailChildFrame = (SCRIPT_SOURCE === 'qq-mail' || SCRIPT_SOURCE === 'mail-163' || SCRIPT_SOURCE === 'inbucket-mail') && window !== window.top;
+if (!_isMailChildFrame && !__MULTIPAGE_UTILS_STATE.readyReported) {
+  __MULTIPAGE_UTILS_STATE.readyReported = true;
   reportReady();
 }

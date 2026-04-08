@@ -266,3 +266,11 @@ async function handlePollEmail(step, payload) {
 }
 
 } // end of isTopFrame else block
+(function() {
+if (window.__MULTIPAGE_INBUCKET_MAIL_LOADED) {
+  console.log('[MultiPage:inbucket-mail] Content script already loaded on', location.href);
+  return;
+}
+window.__MULTIPAGE_INBUCKET_MAIL_LOADED = true;
+
+})();

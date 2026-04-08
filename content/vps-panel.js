@@ -23,6 +23,13 @@
 //   </div>
 // </div>
 
+(function() {
+if (window.__MULTIPAGE_VPS_PANEL_LOADED) {
+  console.log('[MultiPage:vps-panel] Content script already loaded on', location.href);
+  return;
+}
+window.__MULTIPAGE_VPS_PANEL_LOADED = true;
+
 console.log('[MultiPage:vps-panel] Content script loaded on', location.href);
 
 // Listen for commands from Background
@@ -181,3 +188,4 @@ async function step9_vpsVerify(payload) {
 
   reportComplete(9);
 }
+})();
