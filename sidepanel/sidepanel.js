@@ -33,12 +33,14 @@ const inputInbucketMailbox = document.getElementById('input-inbucket-mailbox');
 const inputRunCount = document.getElementById('input-run-count');
 const inputRunInfinite = document.getElementById('input-run-infinite');
 const DEFAULT_AUTO_RUN_COUNT = 1;
+const { buildToastKey, canonicalizeToastMessage, getToastDuration } = ToastFeedback;
 
 // ============================================================
 // Toast Notifications
 // ============================================================
 
 const toastContainer = document.getElementById('toast-container');
+const activeToasts = new Map();
 
 const TOAST_ICONS = {
   error: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
@@ -47,23 +49,59 @@ const TOAST_ICONS = {
   info: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
 };
 
-function showToast(message, type = 'error', duration = 4000) {
+function showToast(message, type = 'error', duration, options = {}) {
+  const resolvedDuration = getToastDuration(type, duration);
+  const toastKey = buildToastKey(message, type);
+  const existing = activeToasts.get(toastKey);
+  const displayMessage = options.canonicalizeDisplay
+    ? canonicalizeToastMessage(message)
+    : message;
+
+  if (existing?.toast?.parentNode) {
+    existing.messageEl.textContent = displayMessage;
+    scheduleToastDismiss(existing.toast, resolvedDuration);
+    return existing.toast;
+  }
+
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  toast.innerHTML = `${TOAST_ICONS[type] || ''}<span class="toast-msg">${escapeHtml(message)}</span><button class="toast-close">&times;</button>`;
+  toast.innerHTML = `${TOAST_ICONS[type] || ''}<span class="toast-msg">${escapeHtml(displayMessage)}</span><button class="toast-close">&times;</button>`;
+  toast.dataset.toastKey = toastKey;
 
   toast.querySelector('.toast-close').addEventListener('click', () => dismissToast(toast));
+  activeToasts.set(toastKey, {
+    toast,
+    messageEl: toast.querySelector('.toast-msg'),
+  });
   toastContainer.appendChild(toast);
+  scheduleToastDismiss(toast, resolvedDuration);
+  return toast;
+}
 
+function scheduleToastDismiss(toast, duration) {
+  if (toast._dismissTimer) {
+    clearTimeout(toast._dismissTimer);
+    toast._dismissTimer = null;
+  }
   if (duration > 0) {
-    setTimeout(() => dismissToast(toast), duration);
+    toast._dismissTimer = setTimeout(() => dismissToast(toast), duration);
   }
 }
 
 function dismissToast(toast) {
   if (!toast.parentNode) return;
+  if (toast._dismissTimer) {
+    clearTimeout(toast._dismissTimer);
+    toast._dismissTimer = null;
+  }
   toast.classList.add('toast-exit');
-  toast.addEventListener('animationend', () => toast.remove());
+  toast.addEventListener('animationend', () => {
+    const toastKey = toast.dataset.toastKey;
+    if (toastKey && activeToasts.get(toastKey)?.toast === toast) {
+      activeToasts.delete(toastKey);
+    }
+    toast.remove();
+  }, { once: true });
 }
 
 // ============================================================
@@ -285,7 +323,7 @@ async function fetchDuckEmail() {
     }
 
     inputEmail.value = response.email;
-    showToast(`Fetched ${response.email}`, 'success', 2500);
+    showToast(`Fetched ${response.email}`, 'success', 3500);
     return response.email;
   } catch (err) {
     showToast(`Auto fetch failed: ${err.message}`, 'error');
@@ -332,7 +370,7 @@ btnTogglePassword.addEventListener('click', () => {
 btnStop.addEventListener('click', async () => {
   btnStop.disabled = true;
   await chrome.runtime.sendMessage({ type: 'STOP_FLOW', source: 'sidepanel', payload: {} });
-  showToast('Stopping current flow...', 'warn', 2000);
+  showToast('Stopping current flow...', 'warn', 4000);
 });
 
 // Auto Run
@@ -452,7 +490,7 @@ chrome.runtime.onMessage.addListener((message) => {
     case 'LOG_ENTRY':
       appendLog(message.payload);
       if (message.payload.level === 'error') {
-        showToast(message.payload.message, 'error');
+        showToast(message.payload.message, 'error', undefined, { canonicalizeDisplay: true });
       }
       break;
 
@@ -534,7 +572,7 @@ chrome.runtime.onMessage.addListener((message) => {
           updateStopButtonState(false);
           updateRunModeUI();
           if (summaryToast) {
-            showToast(summaryToast, 'success', 5000);
+            showToast(summaryToast, 'success', 7000);
           }
           break;
         case 'stopped':
@@ -545,7 +583,7 @@ chrome.runtime.onMessage.addListener((message) => {
           updateStopButtonState(false);
           updateRunModeUI();
           if (summaryToast) {
-            showToast(summaryToast, 'warn', 5000);
+            showToast(summaryToast, 'warn', 7000);
           }
           break;
       }
