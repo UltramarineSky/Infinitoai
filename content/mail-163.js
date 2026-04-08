@@ -7,9 +7,17 @@
 // Subject: span.da0 (e.g., "你的 ChatGPT 代码为 479637")
 // Right-click menu: .nui-menu → .nui-menu-item with text "删除邮件"
 
+(function() {
+if (window.__MULTIPAGE_MAIL_163_LOADED) {
+  console.log('[MultiPage:mail-163] Content script already loaded on', location.href);
+  return;
+}
+window.__MULTIPAGE_MAIL_163_LOADED = true;
+
 const MAIL163_PREFIX = '[MultiPage:mail-163]';
 const isTopFrame = window === window.top;
 const { getStepMailMatchProfile, matchesSubjectPatterns } = MailMatching;
+const { isMailFresh, parseMailTimestampCandidates } = MailFreshness;
 
 console.log(MAIL163_PREFIX, 'Content script loaded on', location.href, 'frame:', isTopFrame ? 'top' : 'child');
 
@@ -72,11 +80,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 function parseEmailDate(item) {
   const aria = item.getAttribute('aria-label') || '';
-  const m = aria.match(/(\d{4})[年/-](\d{1,2})[月/-](\d{1,2})[日]?\s*(\d{1,2}):(\d{2})/);
-  if (m) return new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5]).getTime();
-  const d = aria.match(/(\d{4})[年/-](\d{1,2})[月/-](\d{1,2})/);
-  if (d) return new Date(+d[1], d[2] - 1, +d[3]).getTime();
-  return 0;
+  return parseMailTimestampCandidates([aria], { now: Date.now() });
 }
 
 function findMailItems() {
@@ -100,6 +104,7 @@ async function handlePollEmail(step, payload) {
   const { senderFilters, subjectFilters, maxAttempts, intervalMs, filterAfterTimestamp = 0, excludeCodes = [] } = payload;
   const subjectProfile = getStepMailMatchProfile(step);
   const excludedCodeSet = new Set(excludeCodes);
+  const now = Date.now();
 
   log(`Step ${step}: Starting email poll on 163 Mail (max ${maxAttempts} attempts)`);
 
@@ -155,15 +160,13 @@ async function handlePollEmail(step, payload) {
       const subjectMatch = subjectFilters.some(f => subjectLower.includes(f.toLowerCase()) || ariaLabel.includes(f.toLowerCase()));
       const stepSpecificSubjectMatch = matchesSubjectPatterns(`${subject} ${item.getAttribute('aria-label') || ''}`, subjectProfile);
 
-      if ((stepSpecificSubjectMatch || (!subjectProfile && (senderMatch || subjectMatch))) && filterAfterTimestamp > 0) {
+      if (stepSpecificSubjectMatch || (!subjectProfile && (senderMatch || subjectMatch))) {
         const emailTime = parseEmailDate(item);
-        if (emailTime > 0 && emailTime < filterAfterTimestamp - 60000) {
-          log(`Step ${step}: Skipping old email (date: ${new Date(emailTime).toLocaleString()})`, 'info');
+        if (!isMailFresh(emailTime, { now, filterAfterTimestamp })) {
+          log(`Step ${step}: Skipping stale email (date: ${emailTime ? new Date(emailTime).toLocaleString() : 'unknown'})`, 'info');
           continue;
         }
-      }
 
-      if (stepSpecificSubjectMatch || (!subjectProfile && (senderMatch || subjectMatch))) {
         const code = extractVerificationCode(subject + ' ' + ariaLabel);
         if (code && excludedCodeSet.has(code)) {
           log(`Step ${step}: Skipping excluded code: ${code}`, 'info');
@@ -180,7 +183,7 @@ async function handlePollEmail(step, payload) {
           // Extra wait to ensure deletion is processed
           await sleep(1000);
 
-          return { ok: true, code, emailTimestamp: Date.now(), mailId: id };
+          return { ok: true, code, emailTimestamp: emailTime, mailId: id };
         } else if (code && seenCodes.has(code)) {
           log(`Step ${step}: Skipping already-seen code: ${code}`, 'info');
         }
@@ -306,11 +309,4 @@ function extractVerificationCode(text) {
 }
 
 } // end of isTopFrame else block
-(function() {
-if (window.__MULTIPAGE_MAIL_163_LOADED) {
-  console.log('[MultiPage:mail-163] Content script already loaded on', location.href);
-  return;
-}
-window.__MULTIPAGE_MAIL_163_LOADED = true;
-
 })();

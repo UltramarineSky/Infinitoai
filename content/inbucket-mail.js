@@ -4,10 +4,18 @@
 // Supported page:
 // - /m/<mailbox>/
 
+(function() {
+if (window.__MULTIPAGE_INBUCKET_MAIL_LOADED) {
+  console.log('[MultiPage:inbucket-mail] Content script already loaded on', location.href);
+  return;
+}
+window.__MULTIPAGE_INBUCKET_MAIL_LOADED = true;
+
 const INBUCKET_PREFIX = '[MultiPage:inbucket-mail]';
 const isTopFrame = window === window.top;
 const SEEN_MAIL_IDS_KEY = 'seenInbucketMailIds';
 const { getStepMailMatchProfile, matchesSubjectPatterns } = MailMatching;
+const { isMailFresh, parseMailTimestampCandidates } = MailFreshness;
 
 console.log(INBUCKET_PREFIX, 'Content script loaded on', location.href, 'frame:', isTopFrame ? 'top' : 'child');
 
@@ -125,6 +133,7 @@ function parseMailboxEntry(entry, index = 0) {
     sender,
     mailbox: '',
     subject,
+    timestamp: parseMailTimestampCandidates([dateText], { now: Date.now() }),
     unread: entry.classList.contains('unseen'),
     combinedText,
     mailId: getMailboxEntryId(entry, index),
@@ -175,9 +184,11 @@ async function handleMailboxPollEmail(step, payload) {
     subjectFilters = [],
     maxAttempts = 20,
     intervalMs = 3000,
+    filterAfterTimestamp = 0,
     excludeCodes = [],
   } = payload || {};
   const excludedCodeSet = new Set(excludeCodes);
+  const now = Date.now();
 
   log(`Step ${step}: Starting email poll on Inbucket mailbox page (max ${maxAttempts} attempts)`);
 
@@ -208,6 +219,7 @@ async function handleMailboxPollEmail(step, payload) {
       if (!mail.unread) continue;
       if (seenMailIds.has(mail.mailId)) continue;
       if (!useFallback && existingMailIds.has(mail.mailId)) continue;
+      if (!isMailFresh(mail.timestamp, { now, filterAfterTimestamp })) continue;
 
       const match = rowMatchesFilters(step, mail, senderFilters, subjectFilters, '');
       if (!match.matched) continue;
@@ -238,7 +250,7 @@ async function handleMailboxPollEmail(step, payload) {
       return {
         ok: true,
         code,
-        emailTimestamp: Date.now(),
+        emailTimestamp: mail.timestamp,
         mailId: mail.mailId,
       };
     }
@@ -266,11 +278,4 @@ async function handlePollEmail(step, payload) {
 }
 
 } // end of isTopFrame else block
-(function() {
-if (window.__MULTIPAGE_INBUCKET_MAIL_LOADED) {
-  console.log('[MultiPage:inbucket-mail] Content script already loaded on', location.href);
-  return;
-}
-window.__MULTIPAGE_INBUCKET_MAIL_LOADED = true;
-
 })();
