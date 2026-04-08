@@ -958,10 +958,10 @@ async function fetchDuckEmail(options = {}) {
   });
 
   if (result?.error) {
-    throw new Error(result.error);
+    throw new Error(addDuckMailRetryHint(result.error));
   }
   if (!result?.email) {
-    throw new Error('Duck email not returned.');
+    throw new Error(addDuckMailRetryHint('Duck email not returned.'));
   }
 
   await setEmailState(result.email);
