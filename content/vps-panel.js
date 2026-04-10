@@ -65,21 +65,29 @@ async function handleStep(step, payload) {
 // ============================================================
 
 async function step1_getOAuthLink() {
-  log('Step 1: Waiting for VPS panel to load (auto-login may take a moment)...');
-
-  // The page may start at #/login and auto-redirect to #/oauth.
-  // Wait for the Codex OAuth card to appear (up to 30s for auto-login + redirect).
+  const maxCardLoadAttempts = 3;
   let loginBtn = null;
-  try {
-    // Wait for any card-header containing "Codex" to appear
-    const header = await waitForElementByText('.card-header', /codex/i, 30000);
-    loginBtn = header.querySelector('button.btn.btn-primary, button.btn');
-    log('Step 1: Found Codex OAuth card');
-  } catch {
-    throw new Error(
-      'Codex OAuth card did not appear after 30s. Page may still be loading or not logged in. ' +
-      'Current URL: ' + location.href
-    );
+
+  for (let attempt = 1; attempt <= maxCardLoadAttempts; attempt++) {
+    log(`Step 1: Waiting for VPS panel to load (attempt ${attempt}/${maxCardLoadAttempts})...`);
+
+    try {
+      const header = await waitForElementByText('.card-header', /codex/i, 30000);
+      loginBtn = header.querySelector('button.btn.btn-primary, button.btn');
+      log('Step 1: Found Codex OAuth card');
+      break;
+    } catch {
+      if (attempt >= maxCardLoadAttempts) {
+        throw new Error(
+          'Codex OAuth card did not appear after multiple refresh attempts. Page may still be loading or not logged in. ' +
+          'Current URL: ' + location.href
+        );
+      }
+
+      log(`Step 1: Codex OAuth card not ready on attempt ${attempt}. Refreshing the VPS page and retrying...`, 'warn');
+      location.reload();
+      await sleep(2500);
+    }
   }
 
   if (!loginBtn) {

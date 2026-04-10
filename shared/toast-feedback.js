@@ -8,8 +8,8 @@
   root.ToastFeedback = exports;
 })(typeof globalThis !== 'undefined' ? globalThis : self, function() {
   const TOAST_DURATIONS = {
-    error: 9000,
-    warn: 7000,
+    error: 4200,
+    warn: 3600,
     success: 5000,
     info: 5000,
   };
