@@ -2,13 +2,13 @@
 
 importScripts('shared/email-addresses.js', 'shared/mail-provider-rotation.js', 'shared/tmailor-domains.js', 'shared/tmailor-api.js', 'shared/tmailor-errors.js', 'shared/tmailor-mailbox-strategy.js', 'shared/tmailor-verification-profiles.js', 'shared/flow-recovery.js', 'shared/content-script-queue.js', 'shared/login-verification-codes.js', 'data/names.js', 'shared/flow-runner.js', 'shared/runtime-errors.js', 'shared/auto-run.js', 'shared/auto-run-failure-stats.js', 'shared/duck-mail-errors.js', 'shared/sidepanel-settings.js', 'shared/tab-reclaim.js');
 
-const LOG_PREFIX = '[Infinito.AI:bg]';
+const LOG_PREFIX = '[Infinitoai:bg]';
 const DUCK_AUTOFILL_URL = 'https://duckduckgo.com/email/settings/autofill';
 const STOP_ERROR_MESSAGE = 'Flow stopped by user.';
 const AUTO_RUN_HANDOFF_MESSAGE = 'Auto run handed off to manual continuation.';
 const HUMAN_STEP_DELAY_MIN = 700;
 const HUMAN_STEP_DELAY_MAX = 2200;
-const { runStepSequence } = FlowRunner;
+const { getStepDelayAfter, runStepSequence } = FlowRunner;
 const {
   buildMailPollRecoveryPlan,
   isMessageChannelClosedError,
@@ -2554,10 +2554,72 @@ async function getSignupAuthPageState() {
       source: 'background',
       payload: {},
     });
-    return pageState || { requiresPhoneVerification: false, hasFatalError: false };
+    return pageState || {
+      requiresPhoneVerification: false,
+      hasFatalError: false,
+      hasAuthOperationTimedOut: false,
+      hasVisibleCredentialInput: false,
+      hasVisibleVerificationInput: false,
+      hasVisibleProfileFormInput: false,
+    };
   } catch {
-    return { requiresPhoneVerification: false, hasFatalError: false };
+    return {
+      requiresPhoneVerification: false,
+      hasFatalError: false,
+      hasAuthOperationTimedOut: false,
+      hasVisibleCredentialInput: false,
+      hasVisibleVerificationInput: false,
+      hasVisibleProfileFormInput: false,
+    };
   }
+}
+
+async function ensureSignupPageReadyForVerification(state, step = 4) {
+  const start = Date.now();
+  const timeoutMs = 10000;
+  let refreshedOauthAfterTimeout = false;
+
+  while (Date.now() - start < timeoutMs) {
+    const pageState = await getSignupAuthPageState();
+
+    if (pageState?.hasAuthOperationTimedOut) {
+      if (refreshedOauthAfterTimeout) {
+        throw new Error('Step 4 blocked: signup auth page timed out again after refreshing the VPS OAuth link.');
+      }
+
+      await addLog(
+        `Step ${step}: Signup auth page timed out before the verification email step. Refreshing the VPS OAuth link and replaying step 3...`,
+        'warn'
+      );
+      refreshedOauthAfterTimeout = true;
+      await recoverStep3OauthTimeout();
+      await executeStepAndWait(3, getStepDelayAfter(3), true);
+      state = await getState();
+      continue;
+    }
+
+    if (pageState?.hasFatalError) {
+      throw new Error(`Step ${step} blocked: auth page showed a fatal error before the verification email step.`);
+    }
+
+    if (pageState?.requiresPhoneVerification) {
+      throw new Error(`Step ${step} blocked: auth page requires phone verification before the verification email step.`);
+    }
+
+    if (pageState?.hasVisibleVerificationInput || pageState?.hasVisibleProfileFormInput) {
+      return state;
+    }
+
+    if (pageState?.hasVisibleCredentialInput) {
+      await addLog(`Step ${step}: Signup page is still on the credential form. Waiting before checking the inbox...`, 'info');
+      await sleepWithStop(1000);
+      continue;
+    }
+
+    return state;
+  }
+
+  throw new Error(`Step ${step} blocked: signup page never advanced past the credential form, so the verification email was probably not sent.`);
 }
 
 async function executeVerificationMailStep(step, state, options) {
@@ -2670,8 +2732,9 @@ async function executeVerificationMailStep(step, state, options) {
 }
 
 async function executeStep4(state) {
-  await executeVerificationMailStep(4, state, {
-    filterAfterTimestamp: state.flowStartTime || 0,
+  const effectiveState = await ensureSignupPageReadyForVerification(state, 4);
+  await executeVerificationMailStep(4, effectiveState, {
+    filterAfterTimestamp: effectiveState.flowStartTime || 0,
     ...getTmailorVerificationProfile(4),
     resendAfterAttempts: 3,
     persistLastEmailTimestamp: true,

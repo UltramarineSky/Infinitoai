@@ -70,6 +70,12 @@ function createContext({
       },
     },
     AuthFatalErrors: {
+      isAuthOperationTimedOutText() {
+        return false;
+      },
+      getAuthOperationTimedOutMessage(step) {
+        return `Step ${step} blocked: OpenAI auth page timed out before credentials could be submitted. Refresh the VPS OAuth link and retry with the same email and password.`;
+      },
       isAuthFatalErrorText() {
         return false;
       },
@@ -268,6 +274,76 @@ test('step 3 reports an auth timeout page instead of a missing email field when 
       message: response.error,
     },
   ]);
+});
+
+test('auth page state exposes operation timeout pages before inbox polling begins', async () => {
+  const context = createContext({
+    href: 'https://auth.openai.com/u/signup/password',
+    bodyText: '糟糕，出错了！ Operation timed out',
+  });
+  context.AuthFatalErrors = AuthFatalErrors;
+  loadSignupPage(context);
+
+  const listener = context.__listeners[0];
+  assert.ok(listener, 'expected signup-page to register a runtime listener');
+
+  const response = await new Promise((resolve, reject) => {
+    const keepAlive = listener(
+      { type: 'CHECK_AUTH_PAGE_STATE', source: 'background', payload: {} },
+      {},
+      (result) => resolve(result)
+    );
+    assert.equal(keepAlive, true);
+    setTimeout(() => reject(new Error('timeout waiting for response')), 2000);
+  });
+
+  assert.equal(response?.hasAuthOperationTimedOut, true);
+  assert.equal(response?.hasFatalError, true);
+});
+
+test('auth page state reports when signup is still on the credential form', async () => {
+  const emailInput = {
+    getBoundingClientRect() {
+      return { width: 120, height: 40 };
+    },
+  };
+  const passwordInput = {
+    getBoundingClientRect() {
+      return { width: 120, height: 40 };
+    },
+  };
+
+  const context = createContext({
+    href: 'https://auth.openai.com/u/signup/password',
+    bodyText: '输入密码',
+    querySelectorAllImpl(selector) {
+      if (selector === 'input[type="email"]') {
+        return [emailInput];
+      }
+      if (selector === 'input[type="password"]') {
+        return [passwordInput];
+      }
+      return [];
+    },
+  });
+  loadSignupPage(context);
+
+  const listener = context.__listeners[0];
+  assert.ok(listener, 'expected signup-page to register a runtime listener');
+
+  const response = await new Promise((resolve, reject) => {
+    const keepAlive = listener(
+      { type: 'CHECK_AUTH_PAGE_STATE', source: 'background', payload: {} },
+      {},
+      (result) => resolve(result)
+    );
+    assert.equal(keepAlive, true);
+    setTimeout(() => reject(new Error('timeout waiting for response')), 2000);
+  });
+
+  assert.equal(response?.hasVisibleCredentialInput, true);
+  assert.equal(response?.hasVisibleVerificationInput, false);
+  assert.equal(response?.hasVisibleProfileFormInput, false);
 });
 
 test('step 7 does not treat a post-submit retry page as accepted when the code input disappears', async () => {

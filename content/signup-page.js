@@ -3,12 +3,12 @@
 
 (function() {
 if (window.__MULTIPAGE_SIGNUP_PAGE_LOADED) {
-  console.log('[Infinito.AI:signup-page] Content script already loaded on', location.href);
+  console.log('[Infinitoai:signup-page] Content script already loaded on', location.href);
   return;
 }
 window.__MULTIPAGE_SIGNUP_PAGE_LOADED = true;
 
-console.log('[Infinito.AI:signup-page] Content script loaded on', location.href);
+console.log('[Infinitoai:signup-page] Content script loaded on', location.href);
 const { isVerificationCodeRejectedText, isVerificationRetryStateText } = VerificationCode;
 const { getPhoneVerificationBlockedMessage, isPhoneVerificationRequiredText } = PhoneVerification;
 const {
@@ -356,11 +356,29 @@ function getVisiblePageText() {
 function getAuthPageState() {
   const visibleText = getVisiblePageText();
   return {
+    hasAuthOperationTimedOut: isAuthOperationTimedOutText(visibleText),
     hasFatalError: isAuthFatalErrorText(visibleText),
     requiresPhoneVerification: isPhoneVerificationRequiredText(visibleText),
     hasUnsupportedEmail: isUnsupportedEmailText(visibleText),
+    hasVisibleCredentialInput: hasVisibleCredentialInput(),
+    hasVisibleVerificationInput: hasVisibleVerificationInput(),
+    hasVisibleProfileFormInput: hasVisibleProfileFormInput(),
     url: location.href,
   };
+}
+
+function hasVisibleCredentialInput() {
+  const selectors = [
+    'input[type="email"]',
+    'input[name="email"]',
+    'input[name="username"]',
+    'input[id*="email"]',
+    'input[placeholder*="email"]',
+    'input[placeholder*="Email"]',
+    'input[type="password"]',
+  ];
+
+  return selectors.some((selector) => Array.from(document.querySelectorAll(selector)).some(isElementVisible));
 }
 
 function hasVisibleVerificationInput() {
