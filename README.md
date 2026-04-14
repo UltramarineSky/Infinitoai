@@ -1,4 +1,4 @@
-# Multi-Page Automation
+# Infinito.AI
 
 一个基于 Chrome Side Panel 的自动化扩展，用来批量跑通 ChatGPT OAuth 注册 / 登录流程，并把邮箱获取、验证码轮询、OAuth 确认、VPS 回调验证串成一条可连续执行的工作流。
 
