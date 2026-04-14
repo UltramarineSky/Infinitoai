@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Infinito.AI",
+  "name": "Infinitoai",
   "version": "2.0.0",
   "description": "Automates multi-step OAuth registration workflow",
   "permissions": [
