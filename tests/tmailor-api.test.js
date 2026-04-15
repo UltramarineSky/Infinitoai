@@ -318,7 +318,7 @@ test('pollTmailorVerificationCode ignores non-matching subjects and eventually r
             item1: {
               id: 'mail-a',
               email_id: 'detail-a',
-              subject: 'Your ChatGPT code is 112233',
+              subject: 'Welcome to OpenAI',
               from: 'OpenAI',
               created_at: new Date(now).toISOString(),
             },
@@ -564,6 +564,8 @@ test('pollTmailorVerificationCode reports polling progress when the inbox is sti
       { attempt: 2, maxAttempts: 2, matchedCount: 0, candidateFound: false },
     ]
   );
+});
+
 test('pollTmailorVerificationCode stops immediately when the caller signals a manual or round stop', async () => {
   const now = new Date('2026-04-10T10:00:00.000Z').getTime();
   let stopped = false;
@@ -605,8 +607,6 @@ test('pollTmailorVerificationCode stops immediately when the caller signals a ma
   );
 
   assert.equal(attempts, 1);
-});
-
 });
 
 test('pollTmailorVerificationCode reports poll start before a hanging listinbox request times out', async () => {
