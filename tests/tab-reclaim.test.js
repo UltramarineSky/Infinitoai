@@ -6,6 +6,7 @@ const {
   detectReclaimableSource,
   normalizeOrigin,
   normalizeComparableUrl,
+  shouldReuseActiveTabOnCreate,
   shouldPrepareSameUrlTabForReuse,
 } = require('../shared/tab-reclaim.js');
 
@@ -123,5 +124,20 @@ test('detectReclaimableSource recognizes platform login and chat pages as signup
   assert.equal(
     detectReclaimableSource('https://platform.openai.com/chat', {}),
     'signup-page'
+  );
+});
+
+test('signup-page avoids reusing the current active tab during create-path navigation', () => {
+  assert.equal(
+    shouldReuseActiveTabOnCreate('signup-page', { reuseActiveTabOnCreate: true }),
+    false
+  );
+  assert.equal(
+    shouldReuseActiveTabOnCreate('vps-panel', { reuseActiveTabOnCreate: true }),
+    true
+  );
+  assert.equal(
+    shouldReuseActiveTabOnCreate('signup-page', { reuseActiveTabOnCreate: false }),
+    false
   );
 });

@@ -65,7 +65,7 @@ const {
   isTmailorApiCaptchaCooldownActive,
   pollTmailorVerificationCode,
 } = TmailorApi;
-const { buildReclaimableTabRegistry, shouldPrepareSameUrlTabForReuse } = TabReclaim;
+const { buildReclaimableTabRegistry, shouldPrepareSameUrlTabForReuse, shouldReuseActiveTabOnCreate } = TabReclaim;
 const {
   getMailTabOpenUrlForStep,
   getStep6RecoveryReasonForUnexpectedAuthPage,

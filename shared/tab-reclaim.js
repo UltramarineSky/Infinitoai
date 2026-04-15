@@ -142,11 +142,20 @@
     );
   }
 
+  function shouldReuseActiveTabOnCreate(source, options = {}) {
+    if (!options?.reuseActiveTabOnCreate) {
+      return false;
+    }
+
+    return String(source || '').trim() !== 'signup-page';
+  }
+
   return {
     buildReclaimableTabRegistry,
     detectReclaimableSource,
     normalizeComparableUrl,
     normalizeOrigin,
+    shouldReuseActiveTabOnCreate,
     shouldPrepareSameUrlTabForReuse,
   };
 });
