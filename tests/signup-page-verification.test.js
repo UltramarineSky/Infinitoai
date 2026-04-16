@@ -1929,6 +1929,47 @@ test('auth page state requires email-verification context before promoting the p
   assert.equal(response?.hasReadyProfilePage, false);
 });
 
+test('auth page state still treats the canonical email-verification url as ready when footer copy overlaps with profile wording', async () => {
+  const codeInput = {
+    getBoundingClientRect() {
+      return { width: 120, height: 40 };
+    },
+  };
+
+  const context = createContext({
+    href: 'https://auth.openai.com/email-verification',
+    bodyText: 'Enter the 6-digit code we emailed you. By continuing, you agree to the Terms and Privacy Policy.',
+    querySelectorAllImpl(selector) {
+      if (selector === 'input[name="code"]') {
+        return [codeInput];
+      }
+      if (selector === 'input[inputmode="numeric"]') {
+        return [codeInput];
+      }
+      return [];
+    },
+  });
+  loadSignupPage(context);
+
+  const listener = context.__listeners[0];
+  assert.ok(listener, 'expected signup-page to register a runtime listener');
+
+  const response = await new Promise((resolve, reject) => {
+    const keepAlive = listener(
+      { type: 'CHECK_AUTH_PAGE_STATE', source: 'background', payload: {} },
+      {},
+      (result) => resolve(result)
+    );
+    assert.equal(keepAlive, true);
+    setTimeout(() => reject(new Error('timeout waiting for response')), 2000);
+  });
+
+  assert.equal(response?.hasVisibleVerificationInput, true);
+  assert.equal(response?.hasVisibleCredentialInput, false);
+  assert.equal(response?.hasReadyVerificationPage, true);
+  assert.equal(response?.hasReadyProfilePage, false);
+});
+
 test('auth page state promotes the about-you style profile form only when profile copy is visible', async () => {
   const nameInput = {
     getBoundingClientRect() {

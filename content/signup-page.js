@@ -930,10 +930,17 @@ function hasProfileContextText(text = getVisiblePageText()) {
   return /what is your age|你的年龄是多少|create your account|complete account creation|完成帐户创建|完成账户创建|full name|全名|年龄|birthday|出生|privacy policy|隐私政策|terms|条款/i.test(String(text || ''));
 }
 
+function isCanonicalEmailVerificationPage(url = location.href) {
+  return /(?:auth|accounts)\.openai\.com\/(?:account\/)?email-verification/i.test(String(url || ''));
+}
+
 function hasReadyVerificationPage(text = getVisiblePageText()) {
-  return hasVisibleVerificationInput()
-    && hasVerificationContextText(text)
-    && !hasProfileContextText(text);
+  if (!hasVisibleVerificationInput() || hasVisibleCredentialInput()) {
+    return false;
+  }
+
+  return (hasVerificationContextText(text) && !hasProfileContextText(text))
+    || isCanonicalEmailVerificationPage();
 }
 
 function hasReadyProfilePage(text = getVisiblePageText()) {
