@@ -893,6 +893,44 @@ header {
   font-weight: 700;
 }
 
+.domain-table-head {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+}
+
+.domain-table-clear-btn {
+  min-width: 24px;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--red) 30%, var(--border));
+  border-radius: 999px;
+  background: var(--bg-base);
+  color: var(--red);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.domain-table-clear-btn:hover:not(:disabled) {
+  background: var(--red-soft);
+  border-color: var(--red);
+}
+
+.domain-table-clear-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 18%, transparent);
+}
+
+.domain-table-clear-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .domain-table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -900,6 +938,39 @@ header {
 .domain-table td.num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.domain-name-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.domain-row-action-btn {
+  flex: 0 0 auto;
+  min-width: 34px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--border));
+  border-radius: 999px;
+  background: var(--bg-base);
+  color: var(--orange);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.domain-row-action-btn:hover:not(:disabled) {
+  background: var(--orange-soft);
+  border-color: var(--orange);
+}
+
+.domain-row-action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--orange) 18%, transparent);
 }
 
 .domain-table td.empty {

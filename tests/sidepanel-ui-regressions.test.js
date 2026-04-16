@@ -61,3 +61,39 @@ test('side panel restores and updates preserved log rounds instead of clearing t
   assert.match(source, /case 'AUTO_RUN_RESET':[\s\S]*refreshLogHistoryFromBackground\(\);/);
   assert.doesNotMatch(source, /case 'AUTO_RUN_RESET':[\s\S]*clearLogArea\(\);/);
 });
+
+test('side panel exposes success and failure column delete buttons for both TMailor tables', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'sidepanel', 'sidepanel.html'), 'utf8');
+
+  assert.match(html, /id="btn-whitelist-clear-success"/);
+  assert.match(html, /id="btn-whitelist-clear-failure"/);
+  assert.match(html, /id="btn-blacklist-clear-success"/);
+  assert.match(html, /id="btn-blacklist-clear-failure"/);
+});
+
+test('side panel wires TMailor stat-column delete buttons to persist cleared column values', () => {
+  const source = readSidepanelSource();
+
+  assert.match(source, /const btnWhitelistClearSuccess = document\.getElementById\('btn-whitelist-clear-success'\);/);
+  assert.match(source, /const btnWhitelistClearFailure = document\.getElementById\('btn-whitelist-clear-failure'\);/);
+  assert.match(source, /const btnBlacklistClearSuccess = document\.getElementById\('btn-blacklist-clear-success'\);/);
+  assert.match(source, /const btnBlacklistClearFailure = document\.getElementById\('btn-blacklist-clear-failure'\);/);
+  assert.match(source, /async function clearTmailorStatsColumn\(domains, metric\) \{/);
+  assert.match(source, /await chrome\.runtime\.sendMessage\(\{[\s\S]*type: 'SAVE_TMAILOR_DOMAIN_STATE'[\s\S]*payload: \{ stats: nextState\.stats \}/);
+  assert.match(source, /btnWhitelistClearSuccess\.addEventListener\('click', \(\) => \{[\s\S]*clearTmailorStatsColumn\(tmailorDomainState\.whitelist, 'success'\)/);
+  assert.match(source, /btnWhitelistClearFailure\.addEventListener\('click', \(\) => \{[\s\S]*clearTmailorStatsColumn\(tmailorDomainState\.whitelist, 'failure'\)/);
+  assert.match(source, /btnBlacklistClearSuccess\.addEventListener\('click', \(\) => \{[\s\S]*clearTmailorStatsColumn\(tmailorDomainState\.blacklist, 'success'\)/);
+  assert.match(source, /btnBlacklistClearFailure\.addEventListener\('click', \(\) => \{[\s\S]*clearTmailorStatsColumn\(tmailorDomainState\.blacklist, 'failure'\)/);
+});
+
+test('side panel renders a blacklist action next to whitelist domains and persists moved state', () => {
+  const source = readSidepanelSource();
+
+  assert.match(source, /const \{\s*clearTmailorDomainStats,\s*moveTmailorDomainToBlacklist,/);
+  assert.match(source, /async function moveWhitelistDomainToBlacklist\(domain\) \{/);
+  assert.match(source, /payload: \{\s*whitelist: nextState\.whitelist,\s*blacklist: nextState\.blacklist,\s*stats: nextState\.stats,\s*\}/);
+  assert.match(source, /data-domain-action="blacklist"/);
+  assert.match(source, /class="domain-row-action-btn"/);
+  assert.match(source, /tbodyTmailorWhitelist\.addEventListener\('click', async \(event\) => \{/);
+  assert.match(source, /await moveWhitelistDomainToBlacklist\(button\.dataset\.domain \|\| ''\);/);
+});

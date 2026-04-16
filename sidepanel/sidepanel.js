@@ -52,14 +52,18 @@ const rowInbucketMailbox = document.getElementById('row-inbucket-mailbox');
 const inputInbucketMailbox = document.getElementById('input-inbucket-mailbox');
 const inputRunCount = document.getElementById('input-run-count');
 const inputRunInfinite = document.getElementById('input-run-infinite');
-  const rowTmailorDomains = document.getElementById('row-tmailor-domains');
-  const summaryTmailorWhitelist = document.getElementById('summary-tmailor-whitelist');
-  const summaryTmailorBlacklist = document.getElementById('summary-tmailor-blacklist');
-  const tbodyTmailorWhitelist = document.getElementById('tbody-tmailor-whitelist');
-  const tbodyTmailorBlacklist = document.getElementById('tbody-tmailor-blacklist');
-  const selectTmailorDomainMode = document.getElementById('select-tmailor-domain-mode');
-  const tmailorApiStatus = document.getElementById('tmailor-api-status');
-  const btnTmailorApiCode = document.getElementById('btn-tmailor-api-code');
+const rowTmailorDomains = document.getElementById('row-tmailor-domains');
+const summaryTmailorWhitelist = document.getElementById('summary-tmailor-whitelist');
+const summaryTmailorBlacklist = document.getElementById('summary-tmailor-blacklist');
+const tbodyTmailorWhitelist = document.getElementById('tbody-tmailor-whitelist');
+const tbodyTmailorBlacklist = document.getElementById('tbody-tmailor-blacklist');
+const selectTmailorDomainMode = document.getElementById('select-tmailor-domain-mode');
+const tmailorApiStatus = document.getElementById('tmailor-api-status');
+const btnTmailorApiCode = document.getElementById('btn-tmailor-api-code');
+const btnWhitelistClearSuccess = document.getElementById('btn-whitelist-clear-success');
+const btnWhitelistClearFailure = document.getElementById('btn-whitelist-clear-failure');
+const btnBlacklistClearSuccess = document.getElementById('btn-blacklist-clear-success');
+const btnBlacklistClearFailure = document.getElementById('btn-blacklist-clear-failure');
 const mailDomainGroups = [...document.querySelectorAll('.mail-domain-group')];
 const mailDomainInputs = {
   '163': input33MailDomain163,
@@ -98,27 +102,29 @@ const {
   shouldFallbackToStep3AfterResume,
   shouldRetryTmailorFetchAfterValidationFailure,
 } = TmailorPasteFeedback;
-  const {
-    normalizeTmailorDomainState,
-    sanitizeTmailorDomainMode,
-    DEFAULT_TMAILOR_DOMAIN_MODE,
-    TMAILOR_DOMAIN_MODES,
-    validateTmailorEmail,
-  } = TmailorDomains;
-  const TMAILOR_DOMAIN_MODE_LABELS = {
-    whitelist_only: '工作模式：仅白名单',
-    com_only: '撞库模式：com域名+白名单',
-  };
+const {
+  clearTmailorDomainStats,
+  moveTmailorDomainToBlacklist,
+  normalizeTmailorDomainState,
+  sanitizeTmailorDomainMode,
+  DEFAULT_TMAILOR_DOMAIN_MODE,
+  TMAILOR_DOMAIN_MODES,
+  validateTmailorEmail,
+} = TmailorDomains;
+const TMAILOR_DOMAIN_MODE_LABELS = {
+  whitelist_only: '工作模式：仅白名单',
+  com_only: '撞库模式：com域名+白名单',
+};
 const { buildToastKey, canonicalizeToastMessage, getToastDuration, shouldSuppressToastMessage } = ToastFeedback;
-  let mailDomainSettingsState = createDefault33MailDomainSettings();
-  let tmailorDomainState = normalizeTmailorDomainState();
-  let tmailorApiStatusState = { ok: false, status: 'idle', message: 'TMailor API not checked yet.' };
-  let autoRunPhaseState = 'idle';
-  let keepLogPinnedToBottom = true;
-  let logRoundsState = [];
-  let selectedLogRoundId = '';
-  let followLatestLogRound = true;
-  renderTmailorModeOptions();
+let mailDomainSettingsState = createDefault33MailDomainSettings();
+let tmailorDomainState = normalizeTmailorDomainState();
+let tmailorApiStatusState = { ok: false, status: 'idle', message: 'TMailor API not checked yet.' };
+let autoRunPhaseState = 'idle';
+let keepLogPinnedToBottom = true;
+let logRoundsState = [];
+let selectedLogRoundId = '';
+let followLatestLogRound = true;
+renderTmailorModeOptions();
 
 const ACTION_ICONS = {
   copy: `
@@ -539,76 +545,145 @@ function updateEmailSourceUI() {
 }
 
 function createDomainRowHtml(domain, stats) {
+  const showBlacklistAction = arguments[2]?.showBlacklistAction === true;
   const successCount = Math.max(0, Number.parseInt(String(stats?.successCount ?? 0), 10) || 0);
   const failureCount = Math.max(0, Number.parseInt(String(stats?.failureCount ?? 0), 10) || 0);
+  const actionHtml = showBlacklistAction
+    ? `<button class="domain-row-action-btn" type="button" data-domain-action="blacklist" data-domain="${escapeHtmlAttribute(domain)}" title="拉黑 ${escapeHtmlAttribute(domain)}" aria-label="拉黑 ${escapeHtmlAttribute(domain)}">拉黑</button>`
+    : '';
   return `
     <tr>
-      <td>${escapeHtml(domain)}</td>
+      <td>
+        <div class="domain-name-cell">
+          <span>${escapeHtml(domain)}</span>
+          ${actionHtml}
+        </div>
+      </td>
       <td class="num">${successCount}</td>
       <td class="num">${failureCount}</td>
     </tr>
   `;
 }
 
-  function renderDomainRows(tbody, domains) {
-    if (domains.length === 0) {
-      tbody.innerHTML = '<tr><td class="empty" colspan="3">暂无数据</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = domains
-      .map((domain) => createDomainRowHtml(domain, tmailorDomainState.stats?.[domain] || {}))
-      .join('');
+function renderDomainRows(tbody, domains) {
+  const showBlacklistAction = tbody === tbodyTmailorWhitelist;
+  if (domains.length === 0) {
+    tbody.innerHTML = '<tr><td class="empty" colspan="3">暂无数据</td></tr>';
+    return;
   }
 
-  function renderTmailorModeOptions() {
-    if (!selectTmailorDomainMode) {
-      return;
-    }
+  tbody.innerHTML = domains
+    .map((domain) => createDomainRowHtml(domain, tmailorDomainState.stats?.[domain] || {}, { showBlacklistAction }))
+    .join('');
+}
 
-    selectTmailorDomainMode.innerHTML = TMAILOR_DOMAIN_MODES
-      .map((mode) => `<option value="${mode}">${TMAILOR_DOMAIN_MODE_LABELS[mode] || mode}</option>`)
-      .join('');
+function renderTmailorModeOptions() {
+  if (!selectTmailorDomainMode) {
+    return;
   }
 
-  async function persistTmailorDomainMode(rawMode) {
-    if (!selectTmailorDomainMode) {
-      return;
-    }
+  selectTmailorDomainMode.innerHTML = TMAILOR_DOMAIN_MODES
+    .map((mode) => `<option value="${mode}">${TMAILOR_DOMAIN_MODE_LABELS[mode] || mode}</option>`)
+    .join('');
+}
 
-    const nextMode = sanitizeTmailorDomainMode(rawMode);
-    if (nextMode === tmailorDomainState.mode) {
-      selectTmailorDomainMode.value = nextMode;
-      return;
-    }
+async function persistTmailorDomainMode(rawMode) {
+  if (!selectTmailorDomainMode) {
+    return;
+  }
 
-    tmailorDomainState = normalizeTmailorDomainState({
-      ...tmailorDomainState,
-      mode: nextMode,
-    });
-
+  const nextMode = sanitizeTmailorDomainMode(rawMode);
+  if (nextMode === tmailorDomainState.mode) {
     selectTmailorDomainMode.value = nextMode;
-    renderTmailorDomainTables();
-
-    try {
-      await chrome.runtime.sendMessage({
-        type: 'SAVE_TMAILOR_DOMAIN_STATE',
-        source: 'sidepanel',
-        payload: { mode: nextMode },
-      });
-    } catch (err) {
-      console.error('Failed to save TMailor domain mode:', err);
-    }
+    return;
   }
 
-  function renderTmailorDomainTables() {
-    const normalizedState = normalizeTmailorDomainState(tmailorDomainState);
-    tmailorDomainState = normalizedState;
-    if (selectTmailorDomainMode) {
-      selectTmailorDomainMode.value = normalizedState.mode;
-    }
+  tmailorDomainState = normalizeTmailorDomainState({
+    ...tmailorDomainState,
+    mode: nextMode,
+  });
 
-    const whitelistDomains = [...normalizedState.whitelist].sort((left, right) => left.localeCompare(right));
+  selectTmailorDomainMode.value = nextMode;
+  renderTmailorDomainTables();
+
+  try {
+    await chrome.runtime.sendMessage({
+      type: 'SAVE_TMAILOR_DOMAIN_STATE',
+      source: 'sidepanel',
+      payload: { mode: nextMode },
+    });
+  } catch (err) {
+    console.error('Failed to save TMailor domain mode:', err);
+  }
+}
+
+async function clearTmailorStatsColumn(domains, metric) {
+  const previousState = tmailorDomainState;
+  const nextState = clearTmailorDomainStats(previousState, domains, metric);
+  if (nextState === previousState) {
+    return;
+  }
+
+  tmailorDomainState = nextState;
+  renderTmailorDomainTables();
+
+  try {
+    await chrome.runtime.sendMessage({
+      type: 'SAVE_TMAILOR_DOMAIN_STATE',
+      source: 'sidepanel',
+      payload: { stats: nextState.stats },
+    });
+    showToast(metric === 'success' ? '成功列已清空' : '失败列已清空', 'success', 2200);
+  } catch (err) {
+    tmailorDomainState = previousState;
+    renderTmailorDomainTables();
+    console.error('Failed to clear TMailor stats column:', err);
+    showToast(`清空统计失败：${err.message}`, 'error');
+  }
+}
+
+async function moveWhitelistDomainToBlacklist(domain) {
+  const normalizedDomain = String(domain || '').trim().toLowerCase();
+  if (!normalizedDomain) {
+    return;
+  }
+
+  const previousState = tmailorDomainState;
+  const nextState = moveTmailorDomainToBlacklist(previousState, normalizedDomain);
+  if (nextState === previousState) {
+    return;
+  }
+
+  tmailorDomainState = nextState;
+  renderTmailorDomainTables();
+
+  try {
+    await chrome.runtime.sendMessage({
+      type: 'SAVE_TMAILOR_DOMAIN_STATE',
+      source: 'sidepanel',
+      payload: {
+        whitelist: nextState.whitelist,
+        blacklist: nextState.blacklist,
+        stats: nextState.stats,
+      },
+    });
+    showToast(`${normalizedDomain} 已移到黑名单`, 'success', 2400);
+  } catch (err) {
+    tmailorDomainState = previousState;
+    renderTmailorDomainTables();
+    console.error('Failed to move whitelist domain to blacklist:', err);
+    showToast(`拉黑失败：${err.message}`, 'error');
+  }
+}
+
+function renderTmailorDomainTables() {
+  const normalizedState = normalizeTmailorDomainState(tmailorDomainState);
+  tmailorDomainState = normalizedState;
+  if (selectTmailorDomainMode) {
+    selectTmailorDomainMode.value = normalizedState.mode;
+  }
+
+  const whitelistDomains = [...normalizedState.whitelist].sort((left, right) => left.localeCompare(right));
   const blacklistDomains = [...normalizedState.blacklist].sort((left, right) => left.localeCompare(right));
   const whitelistTotals = whitelistDomains.reduce((acc, domain) => {
     const stats = normalizedState.stats?.[domain] || {};
@@ -628,6 +703,19 @@ function createDomainRowHtml(domain, stats) {
 
   renderDomainRows(tbodyTmailorWhitelist, whitelistDomains);
   renderDomainRows(tbodyTmailorBlacklist, blacklistDomains);
+
+  if (btnWhitelistClearSuccess) {
+    btnWhitelistClearSuccess.disabled = whitelistDomains.length === 0;
+  }
+  if (btnWhitelistClearFailure) {
+    btnWhitelistClearFailure.disabled = whitelistDomains.length === 0;
+  }
+  if (btnBlacklistClearSuccess) {
+    btnBlacklistClearSuccess.disabled = blacklistDomains.length === 0;
+  }
+  if (btnBlacklistClearFailure) {
+    btnBlacklistClearFailure.disabled = blacklistDomains.length === 0;
+  }
 }
 
 function updateRunModeUI() {
@@ -898,6 +986,10 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+function escapeHtmlAttribute(text) {
+  return escapeHtml(text).replace(/"/g, '&quot;');
 }
 
 function getLogScrollMetrics() {
@@ -1400,21 +1492,54 @@ inputInbucketHost.addEventListener('change', async () => {
   await saveTopSetting({ inbucketHost: inputInbucketHost.value.trim() });
 });
 
-  inputRunCount.addEventListener('input', async () => {
-    const count = parseInt(inputRunCount.value, 10);
-    await saveTopSetting({ autoRunCount: Number.isFinite(count) && count > 0 ? count : DEFAULT_AUTO_RUN_COUNT });
-  });
+inputRunCount.addEventListener('input', async () => {
+  const count = parseInt(inputRunCount.value, 10);
+  await saveTopSetting({ autoRunCount: Number.isFinite(count) && count > 0 ? count : DEFAULT_AUTO_RUN_COUNT });
+});
 
-  inputRunInfinite.addEventListener('change', async () => {
-    updateRunModeUI();
-    await saveTopSetting({ autoRunInfinite: inputRunInfinite.checked });
-  });
+inputRunInfinite.addEventListener('change', async () => {
+  updateRunModeUI();
+  await saveTopSetting({ autoRunInfinite: inputRunInfinite.checked });
+});
 
-  if (selectTmailorDomainMode) {
-    selectTmailorDomainMode.addEventListener('change', () => {
-      void persistTmailorDomainMode(selectTmailorDomainMode.value);
-    });
+if (selectTmailorDomainMode) {
+  selectTmailorDomainMode.addEventListener('change', () => {
+    void persistTmailorDomainMode(selectTmailorDomainMode.value);
+  });
+}
+
+if (btnWhitelistClearSuccess) {
+  btnWhitelistClearSuccess.addEventListener('click', () => {
+    void clearTmailorStatsColumn(tmailorDomainState.whitelist, 'success');
+  });
+}
+
+if (btnWhitelistClearFailure) {
+  btnWhitelistClearFailure.addEventListener('click', () => {
+    void clearTmailorStatsColumn(tmailorDomainState.whitelist, 'failure');
+  });
+}
+
+if (btnBlacklistClearSuccess) {
+  btnBlacklistClearSuccess.addEventListener('click', () => {
+    void clearTmailorStatsColumn(tmailorDomainState.blacklist, 'success');
+  });
+}
+
+if (btnBlacklistClearFailure) {
+  btnBlacklistClearFailure.addEventListener('click', () => {
+    void clearTmailorStatsColumn(tmailorDomainState.blacklist, 'failure');
+  });
+}
+
+tbodyTmailorWhitelist.addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-domain-action="blacklist"]');
+  if (!button) {
+    return;
   }
+
+  await moveWhitelistDomainToBlacklist(button.dataset.domain || '');
+});
 
 // ============================================================
 // Listen for Background broadcasts
