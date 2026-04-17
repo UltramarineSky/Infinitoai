@@ -1316,6 +1316,19 @@ function hasVisibleProfileFormInput() {
 const STEP5_PROFILE_SUBMIT_OUTCOME_TIMEOUT_MS = 12000;
 const STEP5_POST_SUBMIT_SETTLE_TIMEOUT_MS = 12000;
 const STEP5_STABLE_URL_POLL_INTERVAL_MS = 1000;
+const STEP5_RECOVERED_LANDING_CONFIRMATION_ATTEMPTS = 2;
+const STEP5_RECOVERED_LANDING_CONFIRMATION_INTERVAL_MS = 1000;
+const STEP5_NAME_INPUT_WAIT_TIMEOUT_MS = 10000;
+const STEP5_NAME_INPUT_WAIT_POLL_INTERVAL_MS = 250;
+const STEP5_NAME_INPUT_SELECTORS = [
+  'input[name="name"]',
+  'input[name="full_name"]',
+  'input[placeholder*="全名"]',
+  'input[placeholder*="name" i]',
+  'input[autocomplete="name"]',
+  'input[id*="name" i]:not([type="hidden"])',
+];
+const STEP5_NAME_INPUT_SELECTOR = STEP5_NAME_INPUT_SELECTORS.join(', ');
 
 function getStableStep5LandingOutcome() {
   if (!isStablePostProfileLandingUrl()) {
@@ -1326,6 +1339,56 @@ function getStableStep5LandingOutcome() {
     accepted: true,
     reason: 'stable-landing-url',
   };
+}
+
+async function confirmRecoveredStep5LandingUrl() {
+  for (let attempt = 1; attempt <= STEP5_RECOVERED_LANDING_CONFIRMATION_ATTEMPTS; attempt++) {
+    throwIfStopped();
+
+    if (isStablePostProfileLandingUrl()) {
+      return true;
+    }
+
+    if (attempt < STEP5_RECOVERED_LANDING_CONFIRMATION_ATTEMPTS) {
+      await sleep(STEP5_RECOVERED_LANDING_CONFIRMATION_INTERVAL_MS);
+    }
+  }
+
+  return false;
+}
+
+async function waitForStep5NameInputOrRecoveredLanding(timeout = STEP5_NAME_INPUT_WAIT_TIMEOUT_MS) {
+  const start = Date.now();
+  let waitingLogged = false;
+
+  while (Date.now() - start < timeout) {
+    throwIfStopped();
+
+    const nameInput = [STEP5_NAME_INPUT_SELECTOR, ...STEP5_NAME_INPUT_SELECTORS]
+      .flatMap((selector) => Array.from(document.querySelectorAll(selector) || []))
+      .find((element) => isElementVisible(element));
+    if (nameInput) {
+      log(`Found element: ${STEP5_NAME_INPUT_SELECTOR}`);
+      return {
+        nameInput,
+      };
+    }
+
+    if (isStablePostProfileLandingUrl()) {
+      return {
+        recoveredLanding: true,
+      };
+    }
+
+    if (!waitingLogged) {
+      waitingLogged = true;
+      log(`Waiting for selector: ${STEP5_NAME_INPUT_SELECTOR}...`);
+    }
+
+    await sleep(STEP5_NAME_INPUT_WAIT_POLL_INTERVAL_MS);
+  }
+
+  return null;
 }
 
 async function waitForProfileSubmissionOutcome(step, timeout = STEP5_PROFILE_SUBMIT_OUTCOME_TIMEOUT_MS) {
@@ -1989,13 +2052,19 @@ async function step5_fillNameBirthday(payload) {
   // - Age: <input name="age" type="text|number">
 
   // --- Full Name (single field, not first+last) ---
-  let nameInput = null;
-  try {
-    nameInput = await waitForElement(
-      'input[name="name"], input[name="full_name"], input[placeholder*="全名"], input[placeholder*="name" i], input[autocomplete="name"], input[id*="name" i]:not([type="hidden"])',
-      10000
-    );
-  } catch {
+  const nameInputOutcome = await waitForStep5NameInputOrRecoveredLanding();
+  if (nameInputOutcome?.recoveredLanding) {
+    log(`第 5 步：等待姓名输入框期间检测到页面已进入稳定的资料后页面（${location.href}），直接视为资料步骤已经完成。`, 'warn');
+    reportComplete(5, {
+      recoveredAfterNavigation: true,
+      skippedProfileForm: true,
+      reason: 'stable_post_profile_landing_without_name_input',
+    });
+    return;
+  }
+
+  const nameInput = nameInputOutcome?.nameInput || null;
+  if (!nameInput) {
     log('第 5 步：验证完成后一直没有出现姓名输入框，视为可跳过资料填写并继续登录流程。', 'warn');
     reportComplete(5, {
       skippedProfileForm: true,
@@ -2021,17 +2090,34 @@ async function step5_fillNameBirthday(payload) {
       birthdayMode = true;
       break;
     }
+
+    if (isStablePostProfileLandingUrl()) {
+      const recoveredLandingConfirmed = await confirmRecoveredStep5LandingUrl();
+      if (recoveredLandingConfirmed) {
+        log(`第 5 步：等待生日或年龄输入框期间检测到页面已进入稳定的资料后页面（${location.href}），直接视为资料步骤已经完成。`, 'warn');
+        reportComplete(5, {
+          recoveredAfterNavigation: true,
+          skippedProfileForm: true,
+          reason: 'stable_post_profile_landing_without_birthday_input',
+        });
+        return;
+      }
+    }
+
     await sleep(100);
   }
 
-  if (!birthdayMode && !ageInput && isStablePostProfileLandingUrl()) {
-    log('第 5 步：导航恢复后已进入稳定的资料后页面，且没有生日或年龄输入框，视为资料步骤已经完成。', 'warn');
-    reportComplete(5, {
-      recoveredAfterNavigation: true,
-      skippedProfileForm: true,
-      reason: 'stable_post_profile_landing_without_birthday_input',
-    });
-    return;
+  if (!birthdayMode && !ageInput) {
+    const recoveredLandingConfirmed = await confirmRecoveredStep5LandingUrl();
+    if (recoveredLandingConfirmed) {
+      log(`第 5 步：导航恢复后经二次 URL 检查已确认进入稳定的资料后页面（${location.href}），且没有生日或年龄输入框，视为资料步骤已经完成。`, 'warn');
+      reportComplete(5, {
+        recoveredAfterNavigation: true,
+        skippedProfileForm: true,
+        reason: 'stable_post_profile_landing_without_birthday_input',
+      });
+      return;
+    }
   }
 
   await humanPause(500, 1300);
