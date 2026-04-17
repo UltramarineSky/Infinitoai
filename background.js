@@ -2449,6 +2449,15 @@ async function setTmailorEmailLease(updates = {}) {
   return nextLease;
 }
 
+function getTmailorOutcomeEmail(state) {
+  const leaseEmail = getActiveTmailorEmailLease(state)?.email;
+  if (leaseEmail) {
+    return leaseEmail;
+  }
+
+  return state?.email || '';
+}
+
 async function markTmailorOutcomePending(email) {
   await setState({
     email,
@@ -2470,7 +2479,8 @@ async function recordTmailorOutcome(result, context = {}) {
     return;
   }
 
-  const domain = extractEmailDomain(state.email);
+  const outcomeEmail = getTmailorOutcomeEmail(state);
+  const domain = extractEmailDomain(outcomeEmail);
   if (!domain) {
     return;
   }
