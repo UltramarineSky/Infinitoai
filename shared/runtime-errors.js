@@ -36,9 +36,9 @@
 
   function shouldRetryStep3WithPlatformLoginRefresh(error) {
     const message = typeof error === 'string' ? error : error?.message || '';
-    return /step 3 failed: could not find passwordless-login button or password input after submitting email\.\s*url:\s*https:\/\/platform\.openai\.com\/login(?:[/?#]\S*)?/i.test(message)
-      || /step 3 failed: could not find email input field on signup page\.\s*url:\s*https:\/\/platform\.openai\.com\/login(?:[/?#]\S*)?/i.test(message)
-      || /step 3 failed: current auth page is not on the signup flow yet\.\s*url:\s*https:\/\/platform\.openai\.com\/login(?:[/?#]\S*)?/i.test(message);
+    return /step 3 (?:failed|blocked): could not find passwordless-login button or password input after submitting email\.\s*url:\s*https:\/\/platform\.openai\.com\/login(?:[/?#]\S*)?/i.test(message)
+      || /step 3 (?:failed|blocked): could not find email input field on signup page\.\s*url:\s*https:\/\/platform\.openai\.com\/login(?:[/?#]\S*)?/i.test(message)
+      || /step 3 (?:failed|blocked): current auth page is not on the signup flow yet\.\s*url:\s*https:\/\/platform\.openai\.com\/login(?:[/?#]\S*)?/i.test(message);
   }
 
   function shouldRetryStep3WithFreshOauth(error) {
@@ -62,7 +62,11 @@
       || /(?:step 6 recoverable:\s*)?auth issue page offered a "retry" recovery action\./i.test(message)
       || /(?:step 6 recoverable:\s*)?auth issue page offered a "return home" recovery link\./i.test(message)
       || /(?:step 6 failed:\s*)?auth fatal error page detected after login submit\./i.test(message)
-      || /(?:step 6 failed:\s*)?login did not advance after password submit\. still on the password page\./i.test(message);
+      || /(?:step 6 failed:\s*)?login did not advance after password submit\. still on the password page\./i.test(message)
+      || /vps panel did not return a usable oauth url\./i.test(message)
+      || /content script on vps-panel did not respond in \d+s\. try refreshing the tab and retry\./i.test(message)
+      || isMessageChannelClosedError(message)
+      || isReceivingEndMissingError(message);
   }
 
   function shouldRetryStep5WithProfileRefresh(error) {

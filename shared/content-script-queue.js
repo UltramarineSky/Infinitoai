@@ -27,6 +27,10 @@
       return 0;
     }
 
+    if (normalizedSource === 'vps-panel') {
+      return 30000;
+    }
+
     return 15000;
   }
 

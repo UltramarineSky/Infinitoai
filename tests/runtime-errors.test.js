@@ -117,6 +117,17 @@ test('step 3 platform-login stall errors trigger the dedicated platform refresh 
   );
 });
 
+test('step 3 platform-login retry plan also accepts blocked messages and query-string platform login urls', () => {
+  assert.equal(
+    shouldRetryStep3WithPlatformLoginRefresh('Step 3 blocked: current auth page is not on the signup flow yet. URL: https://platform.openai.com/login?redirect=%2Fhome'),
+    true
+  );
+  assert.equal(
+    shouldRetryStep3WithPlatformLoginRefresh('Step 3 blocked: Could not find email input field on signup page. URL: https://platform.openai.com/login#entry'),
+    true
+  );
+});
+
 test('step 1 panel load errors trigger a fresh vps-panel retry plan', () => {
   assert.equal(
     shouldRetryStep1WithFreshVpsPanel('Step 1 failed: Found Codex OAuth card but no login button inside it. URL: https://panel.example.com/oauth'),
@@ -176,6 +187,24 @@ test('step 6 auth-page stalls trigger a fresh oauth retry plan', () => {
   assert.equal(
     shouldRetryStep6WithFreshOauth('Step 6 failed: Incorrect email address or password.'),
     false
+  );
+});
+
+test('step 6 refresh retry plan treats vps-panel disconnects and queue timeouts as recoverable', () => {
+  assert.equal(
+    shouldRetryStep6WithFreshOauth('Content script on vps-panel did not respond in 15s. Try refreshing the tab and retry.'),
+    true
+  );
+  assert.equal(
+    shouldRetryStep6WithFreshOauth('A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received'),
+    true
+  );
+});
+
+test('step 6 refresh retry plan treats an empty oauth url from vps-panel as recoverable', () => {
+  assert.equal(
+    shouldRetryStep6WithFreshOauth('VPS panel did not return a usable OAuth URL.'),
+    true
   );
 });
 
